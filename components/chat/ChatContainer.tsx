@@ -26,7 +26,7 @@ export function ChatContainer({
   onCancelStream,
 }: ChatContainerProps) {
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-gradient-to-b from-background to-muted/20">
+    <div className="flex flex-1 flex-col min-h-0 bg-gradient-to-b from-background to-muted/20">
       {/* エラー表示 */}
       {error && (
         <div className="mx-4 mt-4 flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/10 p-4">

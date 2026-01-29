@@ -58,7 +58,7 @@ export function ChatInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className="border-t bg-gradient-to-t from-background to-background/80 p-4 backdrop-blur-sm"
+      className="shrink-0 border-t bg-gradient-to-t from-background to-background/80 p-4 backdrop-blur-sm"
     >
       <div className="max-w-3xl mx-auto">
         <div
