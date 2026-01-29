@@ -119,8 +119,14 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
+  html, body {
     @apply bg-background text-foreground;
+    height: 100%;
+    overflow: hidden;
+  }
+  /* モバイルでのスクロール改善 */
+  html {
+    -webkit-text-size-adjust: 100%;
   }
 }
 

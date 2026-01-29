@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './MessageBubble';
 import type { Message } from '@/types';
 
@@ -11,6 +10,7 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, isStreaming = false }: MessageListProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // 新しいメッセージが来たら一番下にスクロール
@@ -19,8 +19,12 @@ export function MessageList({ messages, isStreaming = false }: MessageListProps)
   }, [messages]);
 
   return (
-    <ScrollArea className="flex-1 p-4">
-      <div className="space-y-4 max-w-3xl mx-auto">
+    <div
+      ref={scrollRef}
+      className="flex-1 overflow-y-auto overscroll-contain p-4 -webkit-overflow-scrolling-touch"
+      style={{ WebkitOverflowScrolling: 'touch' }}
+    >
+      <div className="space-y-4 max-w-3xl mx-auto pb-4">
         {messages.map((message, index) => (
           <MessageBubble
             key={message.id}
@@ -34,6 +38,6 @@ export function MessageList({ messages, isStreaming = false }: MessageListProps)
         ))}
         <div ref={bottomRef} />
       </div>
-    </ScrollArea>
+    </div>
   );
 }
