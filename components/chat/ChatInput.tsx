@@ -58,7 +58,10 @@ export function ChatInput({
   return (
     <form
       onSubmit={handleSubmit}
-      className="shrink-0 border-t bg-gradient-to-t from-background to-background/80 p-4 backdrop-blur-sm"
+      className="shrink-0 border-t bg-gradient-to-t from-background to-background/80 px-4 pt-4 backdrop-blur-sm"
+      style={{
+        paddingBottom: 'max(1rem, env(safe-area-inset-bottom))'
+      }}
     >
       <div className="max-w-3xl mx-auto">
         <div

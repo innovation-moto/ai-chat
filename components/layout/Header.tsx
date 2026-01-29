@@ -10,7 +10,14 @@ interface HeaderProps {
 
 export function Header({ onMenuClick, onNewChat }: HeaderProps) {
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header
+      className="flex shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+      style={{
+        paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
+        paddingBottom: '0.5rem',
+        minHeight: '3.5rem'
+      }}
+    >
       <div className="flex items-center gap-3">
         {/* モバイルメニューボタン */}
         <Button
