@@ -1,15 +1,79 @@
 import { NextRequest } from 'next/server';
 import { createServerClient } from '@/lib/supabase';
-import { streamChat, generateTitle } from '@/lib/gemini';
+import { streamChat, generateTitle, ImageData } from '@/lib/gemini';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+
 // POST: メッセージを送信してストリーミング応答を取得
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { messages, conversationId, deviceId, isNewConversation } = body;
+    const contentType = request.headers.get('content-type') || '';
+    const supabase = createServerClient();
+
+    let messages: { role: 'user' | 'assistant'; content: string }[];
+    let conversationId: string;
+    let deviceId: string;
+    let isNewConversation: boolean;
+    let imageData: ImageData | undefined;
+    let imageUrl: string | undefined;
+
+    if (contentType.includes('multipart/form-data')) {
+      // 画像付きリクエストの処理
+      const formData = await request.formData();
+      messages = JSON.parse(formData.get('messages') as string);
+      conversationId = formData.get('conversationId') as string;
+      deviceId = formData.get('deviceId') as string;
+      isNewConversation = formData.get('isNewConversation') === 'true';
+
+      const imageFile = formData.get('image') as File | null;
+      if (imageFile && imageFile.size > 0) {
+        // ファイルタイプの検証
+        if (!ALLOWED_MIME_TYPES.includes(imageFile.type)) {
+          return new Response(
+            JSON.stringify({ error: 'JPEG、PNG、WebP形式の画像のみ対応しています' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+
+        // ファイルサイズの検証
+        if (imageFile.size > MAX_FILE_SIZE) {
+          return new Response(
+            JSON.stringify({ error: '画像サイズは4MB以下にしてください' }),
+            { status: 400, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const arrayBuffer = await imageFile.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64 = buffer.toString('base64');
+
+        imageData = { mimeType: imageFile.type, data: base64 };
+
+        // Supabase Storage にアップロード
+        const ext = imageFile.type.split('/')[1];
+        const fileName = `${conversationId}/${Date.now()}.${ext}`;
+
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('chat-images')
+          .upload(fileName, buffer, { contentType: imageFile.type });
+
+        if (!uploadError && uploadData) {
+          const { data: { publicUrl } } = supabase.storage
+            .from('chat-images')
+            .getPublicUrl(uploadData.path);
+          imageUrl = publicUrl;
+        } else {
+          console.error('Storage upload error:', uploadError);
+        }
+      }
+    } else {
+      const body = await request.json();
+      ({ messages, conversationId, deviceId, isNewConversation } = body);
+    }
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
@@ -25,8 +89,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = createServerClient();
-
     // ユーザーメッセージをDBに保存
     const lastUserMessage = messages[messages.length - 1];
     const { data: savedUserMessage, error: userMsgError } = await supabase
@@ -35,6 +97,7 @@ export async function POST(request: NextRequest) {
         conversation_id: conversationId,
         role: 'user',
         content: lastUserMessage.content,
+        image_url: imageUrl || null,
       })
       .select()
       .single();
@@ -54,13 +117,13 @@ export async function POST(request: NextRequest) {
     const stream = new ReadableStream({
       async start(controller) {
         try {
-          // ユーザーメッセージIDを送信
+          // ユーザーメッセージIDと画像URLを送信
           controller.enqueue(
-            encoder.encode(`data: ${JSON.stringify({ userMessageId: savedUserMessage.id })}\n\n`)
+            encoder.encode(`data: ${JSON.stringify({ userMessageId: savedUserMessage.id, imageUrl: imageUrl || null })}\n\n`)
           );
 
-          // Gemini でストリーミング応答を生成
-          for await (const chunk of streamChat(messages)) {
+          // Gemini でストリーミング応答を生成（画像データがあればマルチモーダル）
+          for await (const chunk of streamChat(messages, imageData)) {
             fullContent += chunk;
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({ content: chunk })}\n\n`)
@@ -88,7 +151,7 @@ export async function POST(request: NextRequest) {
 
           // 新規会話の場合、タイトルを生成して更新
           if (isNewConversation) {
-            const title = await generateTitle(lastUserMessage.content);
+            const title = await generateTitle(lastUserMessage.content || '画像');
             const { error: titleError } = await supabase
               .from('conversations')
               .update({ title })

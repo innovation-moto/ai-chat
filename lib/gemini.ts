@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, Part } from '@google/generative-ai';
 
 const apiKey = process.env.GOOGLE_API_KEY;
 const modelName = process.env.GOOGLE_MODEL || 'gemini-1.5-flash';
@@ -16,7 +16,13 @@ export interface GeminiMessage {
   parts: { text: string }[];
 }
 
-// メッセージを Gemini 形式に変換
+// 画像データ型
+export interface ImageData {
+  mimeType: string;
+  data: string; // base64
+}
+
+// メッセージを Gemini 形式に変換（履歴用・テキストのみ）
 export function convertToGeminiFormat(
   messages: { role: 'user' | 'assistant'; content: string }[]
 ): GeminiMessage[] {
@@ -26,9 +32,10 @@ export function convertToGeminiFormat(
   }));
 }
 
-// ストリーミングでチャット応答を生成
+// ストリーミングでチャット応答を生成（マルチモーダル対応）
 export async function* streamChat(
-  messages: { role: 'user' | 'assistant'; content: string }[]
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  imageData?: ImageData
 ): AsyncGenerator<string> {
   if (!genAI) {
     throw new Error('Google API Key が設定されていません');
@@ -37,7 +44,7 @@ export async function* streamChat(
   try {
     const model = genAI.getGenerativeModel({ model: modelName });
 
-    // 会話履歴を Gemini 形式に変換
+    // 会話履歴を Gemini 形式に変換（最後のメッセージ以外）
     const history = convertToGeminiFormat(messages.slice(0, -1));
     const lastMessage = messages[messages.length - 1];
 
@@ -49,8 +56,24 @@ export async function* streamChat(
       },
     });
 
+    // 最後のメッセージのパーツを構築（画像がある場合はマルチモーダル）
+    let messageParts: Part[] | string;
+    if (imageData) {
+      messageParts = [
+        {
+          inlineData: {
+            mimeType: imageData.mimeType,
+            data: imageData.data,
+          },
+        },
+        { text: lastMessage.content || '画像を分析してください' },
+      ];
+    } else {
+      messageParts = lastMessage.content;
+    }
+
     // ストリーミングで応答を生成
-    const result = await chat.sendMessageStream(lastMessage.content);
+    const result = await chat.sendMessageStream(messageParts);
 
     for await (const chunk of result.stream) {
       const text = chunk.text();

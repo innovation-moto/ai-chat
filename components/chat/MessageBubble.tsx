@@ -1,6 +1,7 @@
 'use client';
 
 import { User, Bot } from 'lucide-react';
+import Image from 'next/image';
 import { cn, formatDate } from '@/lib/utils';
 import type { Message } from '@/types';
 
@@ -51,12 +52,29 @@ export function MessageBubble({ message, isStreaming = false }: MessageBubblePro
               : 'bg-muted rounded-tl-md'
           )}
         >
-          <p className={cn(
-            'text-sm whitespace-pre-wrap break-words leading-relaxed',
-            isStreaming && !isUser && 'streaming-cursor'
-          )}>
-            {message.content || (isStreaming ? '' : '...')}
-          </p>
+          {/* 添付画像 */}
+          {message.image_url && (
+            <div className="mb-2">
+              <Image
+                src={message.image_url}
+                alt="添付画像"
+                width={300}
+                height={300}
+                className="max-w-[280px] rounded-lg object-contain"
+                style={{ maxHeight: '280px', width: 'auto' }}
+                unoptimized
+              />
+            </div>
+          )}
+          {/* テキスト（画像のみの場合は非表示） */}
+          {(message.content || !message.image_url) && (
+            <p className={cn(
+              'text-sm whitespace-pre-wrap break-words leading-relaxed',
+              isStreaming && !isUser && 'streaming-cursor'
+            )}>
+              {message.content || (isStreaming ? '' : '...')}
+            </p>
+          )}
         </div>
 
         {/* 時間表示 */}

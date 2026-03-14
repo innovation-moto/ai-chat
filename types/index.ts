@@ -4,6 +4,7 @@ export interface Message {
   conversation_id: string;
   role: 'user' | 'assistant';
   content: string;
+  image_url?: string;
   created_at: string;
 }
 
@@ -55,4 +56,5 @@ export interface CreateMessageRequest {
   conversationId: string;
   role: 'user' | 'assistant';
   content: string;
+  image_url?: string;
 }

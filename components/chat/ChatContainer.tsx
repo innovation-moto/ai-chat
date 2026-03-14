@@ -13,7 +13,7 @@ interface ChatContainerProps {
   isStreaming: boolean;
   isLoading: boolean;
   error: string | null;
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, imageFile?: File) => void;
   onCancelStream: () => void;
 }
 

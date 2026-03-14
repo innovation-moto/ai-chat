@@ -22,9 +22,9 @@ export function useChat({
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // メッセージを送信
-  const sendMessage = useCallback(async (content: string) => {
-    if (!deviceId || !content.trim()) return;
+  // メッセージを送信（画像ファイルオプション対応）
+  const sendMessage = useCallback(async (content: string, imageFile?: File) => {
+    if (!deviceId || (!content.trim() && !imageFile)) return;
 
     setError(null);
     setIsStreaming(true);
@@ -43,12 +43,14 @@ export function useChat({
       conversationId = newConversation.id;
     }
 
-    // ユーザーメッセージを追加
+    // ユーザーメッセージを追加（画像プレビューURLを一時的に設定）
+    const tempImageUrl = imageFile ? URL.createObjectURL(imageFile) : undefined;
     const userMessage: Message = {
       id: `temp-user-${Date.now()}`,
       conversation_id: conversationId,
       role: 'user',
       content,
+      image_url: tempImageUrl,
       created_at: new Date().toISOString(),
     };
 
@@ -70,20 +72,39 @@ export function useChat({
     try {
       abortControllerRef.current = new AbortController();
 
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          conversationId,
-          deviceId,
-          isNewConversation,
-        }),
-        signal: abortControllerRef.current.signal,
-      });
+      // 画像がある場合は FormData、なければ JSON で送信
+      const messagesForApi = updatedMessages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      let res: Response;
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append('messages', JSON.stringify(messagesForApi));
+        formData.append('conversationId', conversationId);
+        formData.append('deviceId', deviceId);
+        formData.append('isNewConversation', String(isNewConversation));
+        formData.append('image', imageFile);
+
+        res = await fetch('/api/chat', {
+          method: 'POST',
+          body: formData,
+          signal: abortControllerRef.current.signal,
+        });
+      } else {
+        res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: messagesForApi,
+            conversationId,
+            deviceId,
+            isNewConversation,
+          }),
+          signal: abortControllerRef.current.signal,
+        });
+      }
 
       if (!res.ok) {
         const data = await res.json();
@@ -113,7 +134,6 @@ export function useChat({
 
                 if (parsed.content) {
                   fullContent += parsed.content;
-                  // メッセージを更新
                   onUpdateMessages([
                     ...updatedMessages,
                     { ...assistantMessage, content: fullContent },
@@ -126,6 +146,13 @@ export function useChat({
 
                 if (parsed.userMessageId) {
                   userMessage.id = parsed.userMessageId;
+                  // サーバーから返った実際の画像URLに置き換え（blob URLを解放）
+                  if (tempImageUrl) {
+                    URL.revokeObjectURL(tempImageUrl);
+                  }
+                  if (parsed.imageUrl) {
+                    userMessage.image_url = parsed.imageUrl;
+                  }
                 }
 
                 if (parsed.assistantMessageId) {
